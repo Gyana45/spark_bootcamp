@@ -7,19 +7,19 @@ https://www.docker.com/products/docker-desktop/
 
 ### ├── jupyter/
 
-   └── Dockerfile
+           └── Dockerfile
 
 ### ├── notebooks/
 
 ### ├── data/
 
-           └── sample.csv
+           └── orders.csv
 
 ### ├──event-logs/
 
 ### ├──spark-conf/
 
-        └── spark-defaults.conf
+           └── spark-defaults.conf
 
 3- Now open windows power shell/ Mac terminal change directory to spark-bootcamp
 Run following commands:  
