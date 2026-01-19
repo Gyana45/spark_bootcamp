@@ -4,9 +4,9 @@ from datetime import datetime, timedelta
 import os
 
 # ===== CONFIGURATION =====
-OUTPUT_DIR = "orders_data"
-OUTPUT_FILE = "orders_aggregate.csv"           # change to .parquet if preferred
-NUM_ROWS = 20_000_000                # ~1 GB as CSV
+OUTPUT_DIR = r"/Users/gyana/COURSE/BIG DATA/spark_bootcamp/data"
+OUTPUT_FILE = "orders_100mb.csv"           # change to .parquet if preferred
+NUM_ROWS = 1_000_000              # ~1 GB as CSV
 START_DATE = datetime(2000, 1, 1)
 END_DATE = datetime(2024, 12, 31)
 
