@@ -1,0 +1,21 @@
+# Solve both questions using RDDs first and then dataframe api(spark sql) 
+
+1- find year wise sales for all the orders in delivered state
+2- find top 5 products with the highest sales in Uttar Pradesh
+3- You are given a text file containing multiple lines of text. Each line may contain multiple words separated by spaces. Your task is to count the number of occurrences of each word in the entire file.
+
+Input Example:
+
+Spark is fast
+Spark is scalable
+Spark is powerful
+Learn spark
+
+Expected Output:
+
+spark  4
+is  3
+fast  1
+scalable  1
+powerful  1 
+learn 1

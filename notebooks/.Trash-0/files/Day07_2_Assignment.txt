@@ -1,0 +1,146 @@
+
+## Assignment 1: Managed Table Using `saveAsTable`
+
+**Objective:**
+Understand how Spark creates and manages table storage.
+
+**Task:**
+
+1. Read the `orders` dataset using the provided schema.
+2. Create a **managed table** named `orders_managed`.
+3. Use **Parquet format**.
+4. Do **not** specify any path explicitly.
+
+**Questions to answer:**
+
+* Where is the data physically stored?
+* What happens to the data if the table is dropped?
+* Which command did you use to verify table location?
+
+**Expected concepts tested:**
+
+* Managed table default location
+* Hive warehouse directory
+* Table lifecycle ownership by Spark
+
+---
+
+## Assignment 2: External Table Using `saveAsTable`
+
+**Objective:**
+Understand how Spark handles external tables.
+
+**Task:**
+
+1. Read the `orders` dataset.
+2. Create an **external table** named `orders_external`.
+3. Store data at path `/data/external/orders/`.
+4. Use Parquet format.
+
+**Questions to answer:**
+
+* What happens to the data when the table is dropped?
+* How is this different from Assignment 1?
+* How can you confirm this is an external table?
+
+**Hint:**
+Use `.option("path", "...")` with `saveAsTable`.
+
+---
+
+## Assignment 3: Using `save` vs `saveAsTable`
+
+**Objective:**
+Understand the difference between writing files and creating tables.
+
+**Task:**
+
+1. Write the `orders` DataFrame using:
+
+   * `.write.format("parquet").save("/data/orders_files/")`
+2. Try running `SELECT * FROM orders_files` in Spark SQL.
+
+**Questions to answer:**
+
+* Why does the query fail?
+* What extra step is needed to query this data using SQL?
+* Which method creates metadata automatically?
+
+---
+
+## Assignment 4: Partitioned Managed Table
+
+**Objective:**
+Understand partitioning in Spark tables.
+
+**Task:**
+
+1. Create a **managed table** named `orders_partitioned`.
+2. Partition the data by `order_date`.
+3. Use Parquet format.
+
+**Questions to answer:**
+
+* How many folders are created inside the table directory?
+* What happens if you filter by `order_date` in a query?
+* Does partitioning change the number of files per partition?
+
+---
+
+## Assignment 5: Partitioned External Table with Multiple Columns
+
+**Objective:**
+Understand multi-level partitioning.
+
+**Task:**
+
+1. Create an **external table** named `orders_ext_part`.
+2. Partition by:
+
+   * `order_date`
+   * `state`
+3. Store data in `/data/external/orders_partitioned/`.
+
+**Questions to answer:**
+
+* What is the folder structure?
+* Which column should ideally be first in partitioning and why?
+* What happens if you filter only by `state`?
+
+---
+
+## Assignment 6: Overwrite vs Append Behavior
+
+**Objective:**
+Understand write modes with tables.
+
+**Task:**
+
+1. Write data to `orders_managed` using `mode("overwrite")`.
+2. Re-run the job using `mode("append")`.
+
+**Questions to answer:**
+
+* How does file count change?
+* Does Spark rewrite existing partitions?
+* What happens if schema changes?
+
+---
+
+## Assignment 7: Table Metadata Exploration
+
+**Objective:**
+Get comfortable with Spark catalog.
+
+**Task:**
+Run and analyze output of:
+
+* `DESCRIBE EXTENDED orders_managed`
+* `SHOW TABLES`
+* `SHOW PARTITIONS orders_partitioned`
+
+**Questions to answer:**
+
+* How can you tell if a table is managed or external?
+* Where is partition information stored?
+* Which command shows the table location?
