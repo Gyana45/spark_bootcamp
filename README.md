@@ -42,6 +42,8 @@ Worker 1 UI → http://localhost:8081
 
 Worker 2 UI → http://localhost:8082
 
+Spark history - http://localhost:18080
+
 # Stop the cluster when done:
 docker compose down
 
