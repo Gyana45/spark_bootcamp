@@ -1,0 +1,190 @@
+## Assignment 1: Cache vs Persist in Real Life
+
+### Objective
+
+Understand **when caching helps**, **what gets cached**, and **storage levels**.
+
+### Tasks
+
+1. Load a large dataset (for example orders with at least 50M rows).
+2. Apply 3 transformations:
+
+   * filter by date
+   * add a derived column
+   * group by state
+3. Run an action (`count`) twice **without cache**.
+4. Now apply:
+
+   * `df.cache()`
+   * run the same action twice
+5. Repeat using:
+
+   * `persist(StorageLevel.MEMORY_AND_DISK)`
+
+### Questions to Answer
+
+* Did the second action run faster? Why or why not?
+* In Spark UI, which stages were skipped after caching?
+* What happens if cached data does not fit in memory?
+
+
+---
+
+## Assignment 2: Cache Pitfall
+
+### Objective
+
+Understand **lazy evaluation** and wrong cache placement.
+
+### Tasks
+
+1. Cache a DataFrame **before** applying filter.
+2. Perform a filter and aggregation.
+3. Compare with:
+
+   * caching **after** filter.
+
+### Questions
+
+* Which approach used more memory?
+* Why is caching early often a bad idea?
+* When does Spark actually cache the data?
+
+---
+
+## Assignment 3: Broadcast Hash Join
+
+### Objective
+
+See how broadcast join avoids shuffle.
+
+### Tasks
+
+1. Create:
+
+   * large fact table (orders)
+   * small dimension table (products_12mb.csv)
+2. Join without any hint.
+3. Join using:
+
+   ```python
+   broadcast(products_df)
+   ```
+4. Compare Spark UI for both runs.
+
+### Questions
+
+* Which join avoided shuffle? How do you know?
+
+
+---
+
+## Assignment 4: Shuffle Sort Merge Join
+
+### Objective
+
+Understand default Spark join behavior.
+
+### Tasks
+
+1. Join two large tables on a key without any hint. orders_1gb , products_12mb
+
+2. Observe physical plan.
+
+### Questions
+
+* Why did Spark choose sort merge join?
+* Why is sorting required on both sides?
+* Which stage consumes the most time?
+
+---
+
+## Assignment 5: Shuffle Hash Join
+
+### Objective
+
+Understand why shuffle hash join is rare.
+
+### Tasks
+
+
+1. Force shuffle hash join using hints.
+2. Join two moderately sized tables.
+
+### Questions
+
+* Why is shuffle hash join memory heavy?
+* In what scenario can shuffle hash join be faster than sort merge join?
+* Why does Spark avoid it by default?
+
+---
+
+## Assignment 6: Join Strategy Comparison
+
+### Objective
+
+Decision making, not syntax.
+
+### Tasks
+
+Create a table comparing:
+
+* Broadcast Hash Join
+* Shuffle Sort Merge Join
+* Shuffle Hash Join
+
+Columns:
+
+* Shuffle required
+* Memory usage
+* Sort required
+* Typical use case
+* Failure scenario
+
+---
+
+## Assignment 7: Catalyst Optimizer Observation
+
+### Objective
+
+See Catalyst in action.
+
+### Tasks
+
+1. Write a query with:
+
+   * redundant filters
+   * unused columns
+2. Run:
+
+   ```python
+   df.explain(True)
+   ```
+
+### Questions
+
+* Which filters were pushed down?
+* Which columns were removed?
+* What logical plan changes did Catalyst make?
+
+---
+
+## Assignment 8: Catalyst vs Caching
+
+### Objective
+
+Clear a common confusion.
+
+### Tasks
+
+1. Write two logically equivalent queries.
+2. Compare physical plans.
+3. Cache intermediate DataFrame in one version.
+
+### Questions
+
+* Did Catalyst optimize both queries the same way?
+* Does caching affect Catalyst optimization?
+* Which optimization happens first: Catalyst or caching?
+
+
