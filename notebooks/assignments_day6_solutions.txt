@@ -1,0 +1,426 @@
+
+1. Using the orders and products datasets, find the **top 2 most profitable products in each state**, where profit is defined as `(unit_price − cost_price) * quantity`. Consider only delivered orders. Return state, product_id, total profit, and rank within the state.
+
+from pyspark.sql.functions import col, sum as _sum, rank, lower, coalesce, lit
+from pyspark.sql.window import Window
+
+# filter
+df_delivered = df_orders.filter(lower(col("order_status")) == "delivered")
+
+# Join
+df_joined = df_delivered.join(df_products, "product_id", "inner")
+
+# Safe profit calculation
+df_profit = df_joined.withColumn(
+    "profit",
+    (coalesce(col("price"), lit(0)) - coalesce(col("cost_price"), lit(0))) * coalesce(col("quantity"), lit(0))
+)
+
+# Aggregation
+df_agg = df_profit.groupBy("state", "product_id").agg(
+    _sum("profit").alias("total_profit")
+)
+
+# Window
+window_spec = Window.partitionBy("state").orderBy(col("total_profit").desc())
+
+# Ranking
+df_top2 = df_agg.withColumn("rank", rank().over(window_spec)) \
+                .filter(col("rank") <= 2)
+
+df_top2.show(df_top2.count(), truncate=False)
+
+
+2. For each customer, identify their **most recent order** and calculate the **difference between that order’s unit price and the average unit price of all products purchased by that customer**. Return customer_id, order_id, order_date, unit_price, and the price difference.
+
+from pyspark.sql.functions import col, avg, row_number
+from pyspark.sql.window import Window
+
+# Step 1: Window to get most recent order per customer
+window_latest = Window.partitionBy("customer_id").orderBy(col("order_date").desc())
+
+df_latest = df_orders.withColumn(
+    "rn",
+    row_number().over(window_latest)
+).filter(col("rn") == 1)
+
+# Step 2: Average unit price per customer
+df_avg = df_orders.groupBy("customer_id").agg(
+    avg("price").alias("avg_price")
+)
+
+# Step 3: Join latest order with avg price
+df_final = df_latest.join(df_avg, "customer_id", "inner")
+
+# Step 4: Calculate difference
+df_result = df_final.withColumn(
+    "price_diff",
+    col("price") - col("avg_price")
+)
+
+# Final output
+df_result = df_result.select(
+    "customer_id",
+    "order_id",
+    "order_date",
+    col("price").alias("unit_price"),
+    "price_diff"
+).orderBy(col("order_date").desc())
+
+df_result.show(truncate=False)
+
+
+
+3.Using orders and products data, determine for each year the **product that contributed the highest percentage of total yearly revenue**. Return order_year, product_id, product_revenue, total_year_revenue, and revenue_percentage.
+
+from pyspark.sql.functions import col, year, sum as _sum, round
+from pyspark.sql.window import Window
+from pyspark.sql.functions import rank
+
+# Step 1: Extract year
+df_orders_year = df_orders.withColumn(
+    "order_year",
+    year(col("order_date"))
+)
+
+# Step 2: Join with products (optional if only revenue needed)
+df_joined = df_orders_year.join(df_products, "product_id", "inner")
+
+# Step 3: Compute product revenue per year
+df_product_rev = df_joined.withColumn(
+    "revenue",
+    col("price") * col("quantity")
+).groupBy("order_year", "product_id").agg(
+    _sum("revenue").alias("product_revenue")
+)
+
+# Step 4: Compute total revenue per year
+df_total_rev = df_product_rev.groupBy("order_year").agg(
+    _sum("product_revenue").alias("total_year_revenue")
+)
+
+# Step 5: Join product + total revenue
+df_combined = df_product_rev.join(df_total_rev, "order_year")
+
+# Step 6: Calculate percentage contribution
+df_percentage = df_combined.withColumn(
+    "revenue_percentage",
+    round((col("product_revenue") / col("total_year_revenue")) * 100, 2)
+)
+
+# Step 7: Rank products within each year
+window_spec = Window.partitionBy("order_year").orderBy(col("revenue_percentage").desc())
+
+df_ranked = df_percentage.withColumn(
+    "rank",
+    rank().over(window_spec)
+)
+
+# Step 8: Get top product per year
+df_top_product = df_ranked.filter(col("rank") == 1)
+
+# Final output
+df_top_product = df_top_product.select(
+    "order_year",
+    "product_id",
+    "product_revenue",
+    "total_year_revenue",
+    "revenue_percentage"
+).orderBy("order_year")
+
+df_top_product.show(df_top_product.count(),truncate=False)
+
+
+4. Using the orders and products datasets, calculate for each state the running cumulative revenue over time, ordered by order_date, and return state, order_date, order_id, order_value, and cumulative revenue.
+
+from pyspark.sql.functions import col, sum as _sum
+from pyspark.sql.window import Window
+
+# Step 1: Join orders with products (optional, not required for revenue)
+df_joined = df_orders.join(df_products, "product_id", "inner")
+
+# Step 2: Calculate order value
+df_value = df_joined.withColumn(
+    "order_value",
+    col("price") * col("quantity")
+)
+
+# Step 3: Define window (state-wise, ordered by date)
+window_spec = Window.partitionBy("state") \
+                    .orderBy("order_date") \
+                    .rowsBetween(Window.unboundedPreceding, Window.currentRow)
+
+# Step 4: Calculate cumulative revenue
+df_result = df_value.withColumn(
+    "cumulative_revenue",
+    _sum("order_value").over(window_spec)
+)
+
+# Final output
+df_result = df_result.select(
+    "state",
+    "order_date",
+    "order_id",
+    "order_value",
+    "cumulative_revenue"
+).orderBy("state", "order_date")
+
+
+df_result.show(truncate=False)
+
+
+5.For each product, find the first and last order date along with the total revenue generated between those dates, considering only non cancelled orders.
+
+from pyspark.sql.functions import col, min, max, sum as _sum, lower
+
+# Step 1: Filter non-cancelled orders
+df_filtered = df_orders.filter(
+    lower(col("order_status")) != "cancelled"
+)
+
+# Step 2: Calculate revenue
+df_revenue = df_filtered.withColumn(
+    "order_value",
+    col("price") * col("quantity")
+)
+
+# Step 3: Aggregate per product
+df_result = df_revenue.groupBy("product_id").agg(
+    min("order_date").alias("first_order_date"),
+    max("order_date").alias("last_order_date"),
+    _sum("order_value").alias("total_revenue")
+)
+
+# Final output
+df_result.show(df_result.count(),truncate=False)
+
+
+6. Identify customers whose latest order value is greater than their previous order value, and return customer_id, order_id, order_date, previous_order_value, and latest_order_value.
+
+from pyspark.sql.functions import col, lag, row_number
+from pyspark.sql.window import Window
+
+# Step 1: Calculate order value
+df_value = df_orders.withColumn(
+    "order_value",
+    col("price") * col("quantity")
+)
+
+# Step 2: Window for ordering per customer
+window_spec = Window.partitionBy("customer_id").orderBy("order_date")
+
+# Step 3: Get previous order value
+df_lag = df_value.withColumn(
+    "previous_order_value",
+    lag("order_value").over(window_spec)
+)
+
+# Step 4: Window to get latest order
+window_latest = Window.partitionBy("customer_id").orderBy(col("order_date").desc())
+
+df_latest = df_lag.withColumn(
+    "rn",
+    row_number().over(window_latest)
+).filter(col("rn") == 1)
+
+# Step 5: Filter where latest > previous
+df_result = df_latest.filter(
+    col("order_value") > col("previous_order_value")
+)
+
+# Final output
+df_result = df_result.select(
+    "customer_id",
+    "order_id",
+    "order_date",
+    "previous_order_value",
+    col("order_value").alias("latest_order_value")
+)
+
+# Final output
+df_result.show(truncate=False)
+
+
+7.Using orders and products data, rank products within each year based on total profit, and return only the top 3 products per year.
+
+from pyspark.sql.functions import col, year, sum as _sum, rank
+from pyspark.sql.window import Window
+
+# Step 1: Extract year
+from pyspark.sql.functions import col, year, sum as _sum, rank
+from pyspark.sql.window import Window
+
+# Step 1: Extract year
+df_orders_year = df_orders.withColumn(
+    "order_year",
+    year(col("order_date"))
+)
+
+# Step 2: Join with products
+df_joined = df_orders_year.join(df_products, "product_id", "inner")
+
+# Step 3: Calculate profit
+df_profit = df_joined.withColumn(
+    "profit",
+    (col("price") - col("cost_price")) * col("quantity")
+)
+
+# Step 4: Aggregate profit per year + product (include product_name)
+df_agg = df_profit.groupBy("order_year", "product_id", "product_name").agg(
+    _sum("profit").alias("total_profit")
+)
+
+# Step 5: Window spec (rank within each year)
+window_spec = Window.partitionBy("order_year").orderBy(col("total_profit").desc())
+
+# Step 6: Rank products
+df_ranked = df_agg.withColumn(
+    "rank",
+    rank().over(window_spec)
+)
+
+# Step 7: Filter top 3 per year
+df_top3 = df_ranked.filter(col("rank") <= 3)
+
+# Step 8: Order result
+df_top3 = df_top3.orderBy("order_year", "rank")
+
+# Final output
+df_top3 = df_top3.select(
+    "order_year",
+    "product_id",
+    "product_name",
+    "total_profit",
+    "rank"
+)
+
+df_top3.show(df_top3.count(), truncate=False)
+
+
+8.For each state and order_status combination, calculate the percentage contribution of that combination to the total revenue of that state, and return state, order_status, revenue, and revenue_percentage.
+
+from pyspark.sql.functions import col, sum as _sum, round
+from pyspark.sql.window import Window
+
+# Step 1: Calculate revenue
+df_value = df_orders.withColumn(
+    "revenue",
+    col("price") * col("quantity")
+)
+
+# Step 2: Revenue per state + order_status
+df_agg = df_value.groupBy("state", "order_status").agg(
+    _sum("revenue").alias("revenue")
+)
+
+# Step 3: Window to get total revenue per state
+window_spec = Window.partitionBy("state")
+
+# Step 4: Add total state revenue using window
+df_result = df_agg.withColumn(
+    "total_state_revenue",
+    _sum("revenue").over(window_spec)
+)
+
+# Step 5: Calculate percentage
+df_result = df_result.withColumn(
+    "revenue_percentage",
+    round((col("revenue") / col("total_state_revenue")) * 100, 2)
+)
+
+# Final output
+df_result = df_result.select(
+    "state",
+    "order_status",
+    "revenue",
+    "revenue_percentage"
+).orderBy("state", col("revenue_percentage").desc())
+
+
+df_result.show(truncate=False)
+
+
+9.For each customer, calculate the moving average of order value over their last 3 orders, ordered by order_date, and return customer_id, order_id, order_date, order_value, and moving_average.
+
+from pyspark.sql.functions import col, avg
+from pyspark.sql.window import Window
+
+# Step 1: Calculate order value
+df_value = df_orders.withColumn(
+    "order_value",
+    col("price") * col("quantity")
+)
+
+# Step 2: Define window (last 3 orders per customer)
+window_spec = Window.partitionBy("customer_id") \
+    .orderBy("order_date") \
+    .rowsBetween(-2, 0)
+
+# Step 3: Calculate moving average
+df_result = df_value.withColumn(
+    "moving_average",
+    avg("order_value").over(window_spec)
+)
+
+# Final output
+df_result = df_result.select(
+    "customer_id",
+    "order_id",
+    "order_date",
+    "order_value",
+    "moving_average"
+).orderBy("customer_id", "order_date") 
+
+df_result.show(truncate=False)
+
+
+10.Using orders and products datasets, find products whose average selling price is consistently higher than cost price across all years, and return product_id, average_unit_price, average_cost_price, and price_difference.
+
+from pyspark.sql.functions import col, year, avg, min as _min
+
+# Step 1: Extract year
+df_orders_year = df_orders.withColumn(
+    "order_year",
+    year(col("order_date"))
+)
+
+# Step 2: Join with products
+df_joined = df_orders_year.join(df_products, "product_id", "inner")
+
+# Step 3: Avg selling price per product per year
+df_yearly = df_joined.groupBy("product_id", "order_year", "cost_price").agg(
+    avg("price").alias("avg_selling_price")
+)
+
+# Step 4: Check condition (avg_selling_price > cost_price)
+df_check = df_yearly.withColumn(
+    "is_profitable",
+    col("avg_selling_price") > col("cost_price")
+)
+
+# Step 5: Ensure condition holds for ALL years
+df_valid_products = df_check.groupBy("product_id").agg(
+    _min(col("is_profitable").cast("int")).alias("all_years_profitable")
+).filter(col("all_years_profitable") == 1)
+
+# Step 6: Get overall averages
+df_final = df_joined.groupBy("product_id", "cost_price").agg(
+    avg("price").alias("average_unit_price")
+)
+
+# Step 7: Join with valid products
+df_result = df_final.join(df_valid_products, "product_id", "inner") \
+    .withColumn(
+        "price_difference",
+        col("average_unit_price") - col("cost_price")
+    )
+
+# Final output
+df_result = df_result.select(
+    "product_id",
+    "average_unit_price",
+    col("cost_price").alias("average_cost_price"),
+    "price_difference"
+)
+
+df_result.show(truncate=False)

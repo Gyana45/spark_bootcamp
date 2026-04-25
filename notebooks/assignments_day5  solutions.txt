@@ -1,0 +1,150 @@
+
+1. From the dataset, create a result showing `state` and `order_year` with total quantity and total revenue, excluding orders with status `CANCELLED`, and keep only those state–year combinations where total revenue exceeds 550000.
+
+
+df = df_orders.withColumn("order_year", year(to_date("order_date"))) \
+              .withColumn("revenue", col("unit_price") * col("quantity")) \
+              .filter(col("order_status") != "CANCELLED") \
+              .groupBy("state", "order_year") \
+              .agg(
+                  sum("quantity").alias("total_quantity"),
+                  sum("revenue").alias("total_revenue")
+              ) \
+              .filter(col("total_revenue") > 550000)
+
+df.show()
+
+2. Add a column `order_value_category` where orders with total amount greater than 400 are labeled `HIGH_VALUE`, between 250 and 400 as `MEDIUM_VALUE`, and the rest as `LOW_VALUE`, then return the count of orders in each category.
+
+df = df_orders.withColumn(
+        "order_value_category",
+        when(col("unit_price") * col("quantity") > 400, "HIGH_VALUE")
+        .when((col("unit_price") * col("quantity") >= 250) & 
+              (col("unit_price") * col("quantity") <= 400), "MEDIUM_VALUE")
+        .otherwise("LOW_VALUE")
+     ) \
+     .groupBy("order_value_category") \
+     .count()
+df.show()
+
+3. For each `state`, calculate the total number of delivered orders and the total number of orders, and compute the delivery percentage for that state.
+
+df = df_orders.groupBy("state") \
+              .agg(
+                  count(when(col("order_status") == "DELIVERED", True)).alias("delivered_orders"),
+                  count("*").alias("total_orders")
+              ) \
+              .withColumn(
+                  "delivery_percentage",
+                  round(col("delivered_orders") / col("total_orders") * 100, 2)
+              )
+df.show()
+
+4. Create a DataFrame showing `customer_id`, number of distinct order years, and total spending, and return only customers who have placed orders in at least 5 distinct years.
+
+df = df_orders.withColumn("order_year", year(to_date("order_date"))) \
+              .withColumn("order_value", col("unit_price") * col("quantity")) \
+              .groupBy("customer_id") \
+              .agg(
+                  countDistinct("order_year").alias("distinct_years"),
+                  sum("order_value").alias("total_spending")
+              ) \
+              .filter(col("distinct_years") >= 5)
+df.count()
+
+5. Consider only orders placed after 2005, and for each `order_status` calculate the average order value (`unit_price * quantity`), sorting the result in descending order of average value.
+
+df = df_orders.withColumn("order_date", to_date("order_date")) \
+              .filter(col("order_date") > lit("2005-01-01")) \
+              .withColumn("order_value", col("unit_price") * col("quantity")) \
+              .groupBy("order_status") \
+              .agg(avg("order_value").alias("avg_order_value")) \
+              .orderBy(col("avg_order_value").desc())
+df.show()
+
+6. Normalize the `state` column by trimming spaces and converting it to lowercase, then group by the normalized state and compute the total quantity sold, displaying only the top 5 states by total quantity.
+
+df = df_orders.withColumn(
+        "state_normalized",
+        lower(trim(col("state")))
+     ) \
+     .groupBy("state_normalized") \
+     .agg(sum("quantity").alias("total_quantity")) \
+     .orderBy(col("total_quantity").desc()) \
+     .limit(5)
+df.show()
+
+
+7. For each year, calculate the total revenue generated, and return only those years where the average unit price for that year is greater than the overall average unit price across all orders.
+
+overall_avg = df_orders.agg(avg("unit_price").alias("avg_price")).collect()[0][0]
+
+df = df_orders.withColumn("order_year", year(to_date("order_date"))) \
+              .groupBy("order_year") \
+              .agg(
+                  sum(col("unit_price") * col("quantity")).alias("total_revenue"),
+                  avg("unit_price").alias("year_avg_price")
+              ) \
+              .filter(col("year_avg_price") > overall_avg)
+df.show()
+
+8. Create a column `bulk_order_flag` such that quantity greater than or equal to 3 is marked as `Y` and others as `N`, then for each state calculate the percentage of bulk orders.
+
+df = df_orders.withColumn(
+        "bulk_order_flag",
+        when(col("quantity") >= 3, "Y").otherwise("N")
+     ) \
+     .groupBy("state") \
+     .agg(
+         count(when(col("bulk_order_flag") == "Y", True)).alias("bulk_orders"),
+         count("*").alias("total_orders")
+     ) \
+     .withColumn(
+         "bulk_order_percentage",
+         round(col("bulk_orders") / col("total_orders") * 100, 2)
+     )
+df.show()
+
+
+9. Find all states where the difference between the maximum and minimum unit price within that state is less than 100, and return the state along with the price difference.
+
+df = df_orders.groupBy("state") \
+              .agg(
+                  (max("unit_price") - min("unit_price")).alias("price_difference")
+              ) \
+              .filter(col("price_difference") < 100)
+df.show()
+
+10. find all states where orders have been placed in at least three different years and the average order value is greater than the overall average order value across all orders. Consider only orders placed after 2005 and exclude cancelled orders. For the qualifying states, return the state name, total number of orders, total revenue, and average order value, and sort the result by total revenue in descending order.
+
+overall_avg = (
+    df_orders
+    .withColumn("order_date", to_date("order_date"))
+    .filter((col("order_status") != "CANCELLED") & (year("order_date") > 2005))
+    .withColumn("order_value", col("unit_price") * col("quantity"))
+    .agg(avg("order_value").alias("avg_order_value"))
+    .collect()[0][0]
+)
+
+# final solution
+result_df = (
+    df_orders
+    .withColumn("order_date", to_date("order_date"))
+    .filter((col("order_status") != "CANCELLED") & (year("order_date") > 2005))
+    .withColumn("order_year", year("order_date"))
+    .withColumn("order_value", col("unit_price") * col("quantity"))
+    .groupBy("state")
+    .agg(
+        count("*").alias("total_orders"),
+        sum("order_value").alias("total_revenue"),
+        avg("order_value").alias("avg_order_value"),
+        countDistinct("order_year").alias("active_years")
+    )
+    .filter(
+        (col("active_years") >= 3) &
+        (col("avg_order_value") > overall_avg)
+    )
+    .orderBy(col("total_revenue").desc())
+)
+
+result_df.show()
